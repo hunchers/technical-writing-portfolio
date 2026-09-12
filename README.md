@@ -6,7 +6,7 @@
 
 Здесь собраны мои коммерческие кейсы и самостоятельные учебно-практические проекты. Они показывают, как я структурирую информацию, проектирую документацию и объясняю технические вещи понятным языком.
 
-<p>
+<p style="margin-bottom: 20px;">
   <a href="https://t.me/katemorrozova"><img src="https://img.shields.io/badge/Telegram-@katemorrozova-2CA5E0?logo=telegram&logoColor=white" alt="Telegram"></a>
   <a href="https://career.habr.com/katemorrozova"><img src="https://img.shields.io/badge/Habr_Career-Резюме-65A3BE?logo=habr&logoColor=white" alt="Резюме на Habr Career"></a>
 </p>
