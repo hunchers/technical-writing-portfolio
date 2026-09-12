@@ -15,6 +15,8 @@
   <a href="https://career.habr.com/katemorrozova"><img src="https://img.shields.io/badge/Habr_Career-Резюме-65A3BE?logo=habr&logoColor=white" alt="Резюме на Habr Career"></a>
 </p>
 
+<br clear="left">
+
 
 ## Проекты
 
