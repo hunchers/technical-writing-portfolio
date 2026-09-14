@@ -21,14 +21,16 @@ https://api.example.test/v1
 
 1. Получите API-ключ в настройках интеграции.
 2. Передавайте ключ в заголовке `Authorization`.
-3. Отправьте запрос на создание уведомления.
-4. Сохраните идентификатор уведомления из ответа.
-5. Запросите статус доставки по идентификатору.
+3. Для создания уведомления сформируйте уникальный `Idempotency-Key`.
+4. Отправьте запрос на создание уведомления.
+5. Сохраните идентификатор уведомления из ответа.
+6. Запросите статус доставки по идентификатору.
 
 ```bash
 curl --request POST 'https://api.example.test/v1/notifications' \
   --header 'Authorization: Bearer demo_api_key' \
   --header 'Content-Type: application/json' \
+  --header 'Idempotency-Key: 8f6d01c4-2b90-4e6c-a54d-720e9b17d111' \
   --data '{
     "channel": "email",
     "recipient": "user@example.com",
@@ -41,7 +43,9 @@ curl --request POST 'https://api.example.test/v1/notifications' \
 
 ```json
 {
-  "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E6",
+  "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E1",
+  "channel": "email",
+  "recipient": "user@example.com",
   "status": "queued",
   "created_at": "2026-09-12T10:15:30Z"
 }
@@ -59,7 +63,12 @@ Authorization: Bearer <api_key>
 или защищённом хранилище секретов. Не добавляйте ключ в исходный код,
 скриншоты и публичные журналы.
 
-Если ключ отсутствует или недействителен, API возвращает `401 Unauthorized`.
+Если ключ отсутствует, недействителен, истёк или отозван, API возвращает
+`401 Unauthorized` и заголовок аутентификации:
+
+```text
+WWW-Authenticate: Bearer
+```
 
 ## Формат данных
 
@@ -84,6 +93,19 @@ ISO 8601, например `2026-09-12T10:15:30Z`.
 
 Создаёт одно уведомление. Метод возвращает объект со статусом `queued`.
 
+Для безопасного повторения запроса передавайте уникальный ключ в заголовке
+`Idempotency-Key`. Повторный запрос с тем же ключом и тем же телом не
+создаёт второе уведомление: API возвращает результат первоначальной
+операции.
+
+#### Заголовки запроса
+
+| Заголовок | Обязательный | Описание |
+| --- | --- | --- |
+| `Authorization` | Да | API-ключ в формате `Bearer <api_key>`. |
+| `Content-Type` | Да | Для запросов с телом используйте `application/json`. |
+| `Idempotency-Key` | Да | Уникальный ключ операции создания уведомления. |
+
 #### Параметры тела запроса
 
 | Поле | Тип | Обязательное | Описание |
@@ -100,6 +122,7 @@ ISO 8601, например `2026-09-12T10:15:30Z`.
 curl --request POST 'https://api.example.test/v1/notifications' \
   --header 'Authorization: Bearer demo_api_key' \
   --header 'Content-Type: application/json' \
+  --header 'Idempotency-Key: d72db0d8-149b-4f99-af48-98557a72f3c9' \
   --data '{
     "channel": "sms",
     "recipient": "+79990000000",
@@ -112,7 +135,7 @@ curl --request POST 'https://api.example.test/v1/notifications' \
 
 ```json
 {
-  "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E6",
+  "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E2",
   "channel": "sms",
   "recipient": "+79990000000",
   "status": "queued",
@@ -122,7 +145,7 @@ curl --request POST 'https://api.example.test/v1/notifications' \
 ```
 
 Если поле `recipient` не соответствует выбранному каналу, API возвращает
-ошибку валидации `422 Unprocessable Entity`.
+ошибку валидации `422 Unprocessable Content`.
 
 ### Получить уведомление
 
@@ -133,7 +156,7 @@ curl --request POST 'https://api.example.test/v1/notifications' \
 
 ```bash
 curl --request GET \
-  'https://api.example.test/v1/notifications/ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E6' \
+  'https://api.example.test/v1/notifications/ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E2' \
   --header 'Authorization: Bearer demo_api_key'
 ```
 
@@ -141,17 +164,18 @@ curl --request GET \
 
 ```json
 {
-  "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E6",
+  "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E2",
   "channel": "sms",
   "recipient": "+79990000000",
   "status": "delivered",
+  "client_reference": "order-8431",
   "created_at": "2026-09-12T10:15:30Z",
   "delivered_at": "2026-09-12T10:15:34Z"
 }
 ```
 
-Если уведомление с таким идентификатором не найдено, API возвращает
-`404 Not Found`.
+Если уведомление с таким идентификатором не найдено или недоступно
+текущей интеграции, API возвращает `404 Not Found`.
 
 ### Получить список уведомлений
 
@@ -178,7 +202,7 @@ curl --request GET \
 {
   "data": [
     {
-      "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E6",
+      "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E3",
       "channel": "email",
       "recipient": "user@example.com",
       "status": "failed",
@@ -186,7 +210,7 @@ curl --request GET \
         "code": "recipient_unreachable",
         "message": "Адрес получателя недоступен."
       },
-      "created_at": "2026-09-12T10:15:30Z"
+      "created_at": "2026-09-12T10:17:10Z"
     }
   ],
   "next_cursor": null
@@ -197,12 +221,16 @@ curl --request GET \
 
 `POST /notifications/{notification_id}/cancel`
 
-Отменяет уведомление в статусе `queued`. Для уже отправленного или
-доставленного уведомления API возвращает `409 Conflict`.
+Отменяет уведомление в статусе `queued`. Для уведомления, которое уже
+перешло в `sent`, `delivered`, `failed` или `canceled`, API возвращает
+`409 Conflict`.
+
+В примере ниже отменяется отдельное уведомление, которое всё ещё находится
+в статусе `queued`.
 
 ```bash
 curl --request POST \
-  'https://api.example.test/v1/notifications/ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E6/cancel' \
+  'https://api.example.test/v1/notifications/ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E4/cancel' \
   --header 'Authorization: Bearer demo_api_key'
 ```
 
@@ -210,9 +238,9 @@ curl --request POST \
 
 ```json
 {
-  "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E6",
+  "id": "ntf_01HZX4Q2K8M6Y7P9A3B5C1D4E4",
   "status": "canceled",
-  "canceled_at": "2026-09-12T10:16:02Z"
+  "canceled_at": "2026-09-12T10:18:02Z"
 }
 ```
 
@@ -220,13 +248,16 @@ curl --request POST \
 
 | Код | Причина | Действие |
 | --- | --- | --- |
-| `400 Bad Request` | Запрос содержит некорректный JSON или параметр. | Проверьте формат тела запроса и значения полей. |
-| `401 Unauthorized` | API-ключ отсутствует, истёк или отозван. | Проверьте заголовок `Authorization` и выпустите новый ключ при необходимости. |
+| `400 Bad Request` | Тело запроса невозможно разобрать как корректный JSON или нарушен базовый формат запроса. | Проверьте синтаксис JSON и структуру запроса. |
+| `401 Unauthorized` | API-ключ отсутствует, недействителен, истёк или отозван. | Проверьте заголовок `Authorization` и выпустите новый ключ при необходимости. |
 | `404 Not Found` | Ресурс не существует или недоступен этой интеграции. | Проверьте идентификатор и используемый API-ключ. |
-| `409 Conflict` | Операция невозможна в текущем статусе объекта. | Получите актуальный статус уведомления и повторите допустимое действие. |
-| `422 Unprocessable Entity` | JSON корректен, однако нарушены правила валидации. | Исправьте поля, перечисленные в объекте `details`. |
-| `429 Too Many Requests` | Превышен лимит запросов. | Дождитесь времени из заголовка `Retry-After`, затем повторите запрос. |
-| `500 Internal Server Error` | Внутренняя ошибка сервиса. | Повторите запрос с увеличивающейся паузой. Если ошибка сохраняется — передайте в поддержку `request_id`. |
+| `409 Conflict` | Операция невозможна в текущем статусе объекта. | Получите актуальный статус уведомления и выполните допустимое действие. |
+| `422 Unprocessable Content` | JSON синтаксически корректен, но значения полей нарушают правила валидации API. | Исправьте поля, перечисленные в объекте `details`. |
+| `429 Too Many Requests` | Превышен лимит запросов. | Дождитесь времени, указанного в `Retry-After`, затем повторите запрос. |
+| `500 Internal Server Error` | Внутренняя ошибка сервиса. | Повторите безопасный запрос с увеличивающейся паузой. Для `POST /notifications` используйте тот же `Idempotency-Key`, чтобы не создать дубликат. Если ошибка сохраняется — передайте в поддержку `request_id`. |
+
+При ответе `429 Too Many Requests` API всегда возвращает заголовок
+`Retry-After` с рекомендуемой задержкой перед следующим запросом.
 
 ### Формат ошибки
 
@@ -250,10 +281,15 @@ curl --request POST \
 
 - Лимит API — 60 запросов в минуту на один API-ключ.
 - Размер тела запроса — до 64 КБ.
-- Для ошибок `429` и `500` используйте повторные попытки с увеличивающейся
-  паузой.
-- Перед повторной отправкой уведомления запросите его статус: так можно
-  избежать повторной доставки пользователю.
+- При `429` используйте задержку из заголовка `Retry-After`.
+- При временных ошибках `500` используйте повторные попытки с
+  увеличивающейся паузой.
+- Для повторного `POST /notifications` передавайте тот же
+  `Idempotency-Key`, что и в первоначальном запросе. Это предотвращает
+  создание второго уведомления при повторе после сетевого сбоя или
+  неопределённого ответа сервера.
+- Не создавайте новый `Idempotency-Key` для повтора той же операции: новый
+  ключ считается новой операцией и может привести к повторной доставке.
 
 ## Что приложить к обращению в поддержку
 
@@ -264,4 +300,5 @@ curl --request POST \
 - время запроса в UTC;
 - используемый endpoint и HTTP-метод;
 - идентификатор уведомления, если он был создан;
+- `Idempotency-Key` проблемного запроса;
 - пример запроса без персональных данных и секретов.
